@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { useState, useEffect, useCallback, useRef } from "react";
 
 
@@ -607,7 +609,7 @@ export default function BSEIntelligence() {
                         background: s.changePct > 0 ? "rgba(0,255,136,0.1)" : "rgba(255,68,102,0.1)",
                         color: s.changePct > 0 ? "#00cc66" : "#ff4466",
                       }}>
-                        {ALL_STOCKS.find(a => a.symbol === s.symbol)?.short || s.symbol.replace(".NS", "")}
+                        {ALL_STOCKS.find(a => a.symbol === s.symbol)?.short || s?.symbol?.replace(".NS", "") || ""}
                       </div>
                     ))}
                   </div>
