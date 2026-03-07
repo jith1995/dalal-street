@@ -15,35 +15,80 @@ const T = {
 
 // ── CONSTANTS ─────────────────────────────────────────────────────────────────
 const SECTORS = [
-  { id: "it",      name: "Information Technology", color: "#3b82f6", stocks: ["TCS.NS","INFY.NS","WIPRO.NS","HCLTECH.NS","TECHM.NS"] },
-  { id: "banking", name: "Banking & Finance",       color: "#10b981", stocks: ["HDFCBANK.NS","ICICIBANK.NS","SBIN.NS","AXISBANK.NS","BAJFINANCE.NS"] },
-  { id: "energy",  name: "Energy & Oil",            color: "#f59e0b", stocks: ["RELIANCE.NS","ONGC.NS","NTPC.NS"] },
-  { id: "auto",    name: "Automobiles",             color: "#f97316", stocks: ["MARUTI.NS","TATAMOTORS.NS","BAJAJAUT.NS"] },
-  { id: "pharma",  name: "Pharma & Health",         color: "#a855f7", stocks: ["SUNPHARMA.NS","DRREDDY.NS"] },
-  { id: "fmcg",    name: "FMCG",                    color: "#ec4899", stocks: ["HINDUNILVR.NS","ITC.NS"] },
+  { id: "banking",  name: "Banking & Finance",       color: "#10b981", stocks: ["HDFCBANK.NS","ICICIBANK.NS","SBIN.NS","AXISBANK.NS","BAJFINANCE.NS","KOTAKBANK.NS","INDUSINDBK.NS","BANDHANBNK.NS"] },
+  { id: "it",       name: "Information Technology",  color: "#3b82f6", stocks: ["TCS.NS","INFY.NS","WIPRO.NS","HCLTECH.NS","TECHM.NS","LTIM.NS"] },
+  { id: "energy",   name: "Energy & Oil",            color: "#f59e0b", stocks: ["RELIANCE.NS","ONGC.NS","NTPC.NS","POWERGRID.NS","COALINDIA.NS","BPCL.NS"] },
+  { id: "auto",     name: "Automobiles",             color: "#f97316", stocks: ["MARUTI.NS","TATAMOTORS.NS","BAJAJAUT.NS","EICHERMOT.NS","MM.NS"] },
+  { id: "fmcg",     name: "FMCG",                    color: "#ec4899", stocks: ["HINDUNILVR.NS","ITC.NS","NESTLEIND.NS","BRITANNIA.NS","TATACONSUM.NS"] },
+  { id: "pharma",   name: "Pharma & Health",         color: "#a855f7", stocks: ["SUNPHARMA.NS","DRREDDY.NS","CIPLA.NS","APOLLOHOSP.NS","MAXHEALTH.NS"] },
+  { id: "metals",   name: "Metals & Mining",         color: "#94a3b8", stocks: ["TATASTEEL.NS","JSWSTEEL.NS","HINDALCO.NS","COALINDIA.NS"] },
+  { id: "telecom",  name: "Telecom",                 color: "#06b6d4", stocks: ["BHARTIARTL.NS"] },
+  { id: "infra",    name: "Infrastructure",          color: "#84cc16", stocks: ["LT.NS","ADANIPORTS.NS","ULTRACEMCO.NS","GRASIM.NS","SHREECEM.NS"] },
+  { id: "finance",  name: "Financial Services",      color: "#f43f5e", stocks: ["BAJAJFINSV.NS","HDFCLIFE.NS","SBILIFE.NS"] },
+  { id: "other",    name: "Conglomerates & Other",   color: "#8b5cf6", stocks: ["ADANIENT.NS","TITAN.NS","ASIANPAINT.NS","WIPRO.NS","INDIGO.NS","ZOMATO.NS"] },
 ];
 
 const ALL_STOCKS = [
-  { symbol: "RELIANCE.NS",  name: "Reliance Industries",          short: "RELIANCE",     sector: "Energy & Oil" },
-  { symbol: "TCS.NS",       name: "Tata Consultancy Services",    short: "TCS",          sector: "Information Technology" },
-  { symbol: "HDFCBANK.NS",  name: "HDFC Bank",                   short: "HDFC BANK",    sector: "Banking & Finance" },
-  { symbol: "INFY.NS",      name: "Infosys",                      short: "INFOSYS",      sector: "Information Technology" },
-  { symbol: "ICICIBANK.NS", name: "ICICI Bank",                   short: "ICICI BANK",   sector: "Banking & Finance" },
-  { symbol: "WIPRO.NS",     name: "Wipro",                        short: "WIPRO",        sector: "Information Technology" },
-  { symbol: "SBIN.NS",      name: "State Bank of India",          short: "SBI",          sector: "Banking & Finance" },
-  { symbol: "BAJFINANCE.NS",name: "Bajaj Finance",                short: "BAJAJ FIN",    sector: "Banking & Finance" },
-  { symbol: "MARUTI.NS",    name: "Maruti Suzuki",                short: "MARUTI",       sector: "Automobiles" },
-  { symbol: "SUNPHARMA.NS", name: "Sun Pharmaceutical",           short: "SUN PHARMA",   sector: "Pharma & Health" },
-  { symbol: "HCLTECH.NS",   name: "HCL Technologies",             short: "HCL TECH",     sector: "Information Technology" },
-  { symbol: "TATAMOTORS.NS",name: "Tata Motors",                  short: "TATA MOTORS",  sector: "Automobiles" },
-  { symbol: "AXISBANK.NS",  name: "Axis Bank",                    short: "AXIS BANK",    sector: "Banking & Finance" },
-  { symbol: "ONGC.NS",      name: "Oil & Natural Gas Corp",       short: "ONGC",         sector: "Energy & Oil" },
-  { symbol: "NTPC.NS",      name: "NTPC Limited",                 short: "NTPC",         sector: "Energy & Oil" },
-  { symbol: "ITC.NS",       name: "ITC Limited",                  short: "ITC",          sector: "FMCG" },
-  { symbol: "HINDUNILVR.NS",name: "Hindustan Unilever",           short: "HUL",          sector: "FMCG" },
-  { symbol: "DRREDDY.NS",   name: "Dr Reddy's Laboratories",      short: "DR REDDY",     sector: "Pharma & Health" },
-  { symbol: "TECHM.NS",     name: "Tech Mahindra",                short: "TECH MAHINDRA",sector: "Information Technology" },
-  { symbol: "BAJAJAUT.NS",  name: "Bajaj Auto",                   short: "BAJAJ AUTO",   sector: "Automobiles" },
+  // Banking & Finance
+  { symbol: "HDFCBANK.NS",   name: "HDFC Bank",                      short: "HDFC BANK",    sector: "Banking & Finance" },
+  { symbol: "ICICIBANK.NS",  name: "ICICI Bank",                     short: "ICICI BANK",   sector: "Banking & Finance" },
+  { symbol: "SBIN.NS",       name: "State Bank of India",            short: "SBI",          sector: "Banking & Finance" },
+  { symbol: "AXISBANK.NS",   name: "Axis Bank",                      short: "AXIS BANK",    sector: "Banking & Finance" },
+  { symbol: "KOTAKBANK.NS",  name: "Kotak Mahindra Bank",            short: "KOTAK BANK",   sector: "Banking & Finance" },
+  { symbol: "BAJFINANCE.NS", name: "Bajaj Finance",                  short: "BAJAJ FIN",    sector: "Banking & Finance" },
+  { symbol: "BAJAJFINSV.NS", name: "Bajaj Finserv",                  short: "BAJAJ FINSV",  sector: "Financial Services" },
+  { symbol: "HDFCLIFE.NS",   name: "HDFC Life Insurance",            short: "HDFC LIFE",    sector: "Financial Services" },
+  { symbol: "SBILIFE.NS",    name: "SBI Life Insurance",             short: "SBI LIFE",     sector: "Financial Services" },
+  // Information Technology
+  { symbol: "TCS.NS",        name: "Tata Consultancy Services",      short: "TCS",          sector: "Information Technology" },
+  { symbol: "INFY.NS",       name: "Infosys",                        short: "INFOSYS",      sector: "Information Technology" },
+  { symbol: "HCLTECH.NS",    name: "HCL Technologies",               short: "HCL TECH",     sector: "Information Technology" },
+  { symbol: "WIPRO.NS",      name: "Wipro",                          short: "WIPRO",        sector: "Information Technology" },
+  { symbol: "TECHM.NS",      name: "Tech Mahindra",                  short: "TECH MAHINDRA",sector: "Information Technology" },
+  { symbol: "LTIM.NS",       name: "LTIMindtree",                    short: "LTIMINDTREE",  sector: "Information Technology" },
+  // Energy & Oil
+  { symbol: "RELIANCE.NS",   name: "Reliance Industries",            short: "RELIANCE",     sector: "Energy & Oil" },
+  { symbol: "ONGC.NS",       name: "Oil & Natural Gas Corp",         short: "ONGC",         sector: "Energy & Oil" },
+  { symbol: "NTPC.NS",       name: "NTPC Limited",                   short: "NTPC",         sector: "Energy & Oil" },
+  { symbol: "POWERGRID.NS",  name: "Power Grid Corporation",         short: "POWER GRID",   sector: "Energy & Oil" },
+  { symbol: "BPCL.NS",       name: "Bharat Petroleum",              short: "BPCL",         sector: "Energy & Oil" },
+  { symbol: "COALINDIA.NS",  name: "Coal India",                     short: "COAL INDIA",   sector: "Energy & Oil" },
+  // Automobiles
+  { symbol: "MARUTI.NS",     name: "Maruti Suzuki",                  short: "MARUTI",       sector: "Automobiles" },
+  { symbol: "TATAMOTORS.NS", name: "Tata Motors",                    short: "TATA MOTORS",  sector: "Automobiles" },
+  { symbol: "BAJAJAUT.NS",   name: "Bajaj Auto",                     short: "BAJAJ AUTO",   sector: "Automobiles" },
+  { symbol: "EICHERMOT.NS",  name: "Eicher Motors",                  short: "EICHER MOT",   sector: "Automobiles" },
+  { symbol: "MM.NS",        name: "Mahindra & Mahindra",            short: "M&M",          sector: "Automobiles" },
+  // FMCG
+  { symbol: "HINDUNILVR.NS", name: "Hindustan Unilever",             short: "HUL",          sector: "FMCG" },
+  { symbol: "ITC.NS",        name: "ITC Limited",                    short: "ITC",          sector: "FMCG" },
+  { symbol: "NESTLEIND.NS",  name: "Nestle India",                   short: "NESTLE",       sector: "FMCG" },
+  { symbol: "BRITANNIA.NS",  name: "Britannia Industries",           short: "BRITANNIA",    sector: "FMCG" },
+  { symbol: "TATACONSUM.NS", name: "Tata Consumer Products",         short: "TATA CONSUM",  sector: "FMCG" },
+  // Pharma & Health
+  { symbol: "SUNPHARMA.NS",  name: "Sun Pharmaceutical",             short: "SUN PHARMA",   sector: "Pharma & Health" },
+  { symbol: "DRREDDY.NS",    name: "Dr Reddy's Laboratories",        short: "DR REDDY",     sector: "Pharma & Health" },
+  { symbol: "CIPLA.NS",      name: "Cipla",                          short: "CIPLA",        sector: "Pharma & Health" },
+  { symbol: "APOLLOHOSP.NS", name: "Apollo Hospitals",               short: "APOLLO HOSP",  sector: "Pharma & Health" },
+  { symbol: "MAXHEALTH.NS",  name: "Max Healthcare Institute",       short: "MAX HEALTH",   sector: "Pharma & Health" },
+  // Metals & Mining
+  { symbol: "TATASTEEL.NS",  name: "Tata Steel",                     short: "TATA STEEL",   sector: "Metals & Mining" },
+  { symbol: "JSWSTEEL.NS",   name: "JSW Steel",                      short: "JSW STEEL",    sector: "Metals & Mining" },
+  { symbol: "HINDALCO.NS",   name: "Hindalco Industries",            short: "HINDALCO",     sector: "Metals & Mining" },
+  // Infrastructure & Cement
+  { symbol: "LT.NS",         name: "Larsen & Toubro",                short: "L&T",          sector: "Infrastructure" },
+  { symbol: "ADANIPORTS.NS", name: "Adani Ports & SEZ",              short: "ADANI PORTS",  sector: "Infrastructure" },
+  { symbol: "ULTRACEMCO.NS", name: "UltraTech Cement",               short: "ULTRATECH",    sector: "Infrastructure" },
+  { symbol: "GRASIM.NS",     name: "Grasim Industries",              short: "GRASIM",       sector: "Infrastructure" },
+  { symbol: "SHREECEM.NS",   name: "Shree Cement",                   short: "SHREE CEM",    sector: "Infrastructure" },
+  // Telecom
+  { symbol: "BHARTIARTL.NS", name: "Bharti Airtel",                  short: "AIRTEL",       sector: "Telecom" },
+  // Conglomerates & Other
+  { symbol: "ADANIENT.NS",   name: "Adani Enterprises",              short: "ADANI ENT",    sector: "Conglomerates" },
+  { symbol: "TITAN.NS",      name: "Titan Company",                  short: "TITAN",        sector: "Conglomerates" },
+  { symbol: "ASIANPAINT.NS", name: "Asian Paints",                   short: "ASIAN PAINT",  sector: "Conglomerates" },
+  { symbol: "INDIGO.NS",     name: "InterGlobe Aviation (IndiGo)",   short: "INDIGO",       sector: "Conglomerates" },
+  { symbol: "ZOMATO.NS",     name: "Zomato",                         short: "ZOMATO",       sector: "Conglomerates" },
 ];
 
 const PROXY_BASE = "/api/stock";
@@ -550,25 +595,38 @@ export default function DalalStreet() {
     loadedRef.current = true;
     async function loadAll() {
       setLoading(true);
-      // Load price data first (fast)
-      await Promise.all(ALL_STOCKS.map(async (s) => {
-        const d = await fetchStockData(s.symbol);
-        if (d) setStockData(prev => ({ ...prev, [s.symbol]: d }));
-      }));
+
+      // Load price data in batches of 10 to avoid overwhelming Yahoo
+      const BATCH = 10;
+      for (let i = 0; i < ALL_STOCKS.length; i += BATCH) {
+        const batch = ALL_STOCKS.slice(i, i + BATCH);
+        await Promise.all(batch.map(async (s) => {
+          const d = await fetchStockData(s.symbol);
+          if (d) setStockData(prev => ({ ...prev, [s.symbol]: d }));
+        }));
+      }
       setLoading(false);
-      // Then load fundamentals in background (slower, non-blocking)
-      ALL_STOCKS.forEach(async (s) => {
-        const f = await fetchFundamentals(s.symbol);
-        if (f) {
-          setFundData(prev => ({ ...prev, [s.symbol]: f }));
-          // Re-score with fundamentals once available
-          setStockData(prev => {
-            const d = prev[s.symbol];
-            if (!d) return prev;
-            return { ...prev, [s.symbol]: { ...d, score: scoreStock(d, f) } };
-          });
+
+      // Load fundamentals in batches of 5 — NSE is stricter
+      const FUND_BATCH = 5;
+      for (let i = 0; i < ALL_STOCKS.length; i += FUND_BATCH) {
+        const batch = ALL_STOCKS.slice(i, i + FUND_BATCH);
+        await Promise.all(batch.map(async (s) => {
+          const f = await fetchFundamentals(s.symbol);
+          if (f) {
+            setFundData(prev => ({ ...prev, [s.symbol]: f }));
+            setStockData(prev => {
+              const d = prev[s.symbol];
+              if (!d) return prev;
+              return { ...prev, [s.symbol]: { ...d, score: scoreStock(d, f) } };
+            });
+          }
+        }));
+        // Small delay between fundamental batches to avoid NSE 429
+        if (i + FUND_BATCH < ALL_STOCKS.length) {
+          await new Promise(r => setTimeout(r, 300));
         }
-      });
+      }
     }
     loadAll();
   }, []);
@@ -673,7 +731,7 @@ export default function DalalStreet() {
           {loading && (
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <div style={{ width: 12, height: 12, border: `2px solid ${T.border}`, borderTopColor: T.blue, borderRadius: "50%", animation: "spin 1s linear infinite" }} />
-              <span style={{ color: T.textMuted, fontSize: 11 }}>{loadedCount}/{ALL_STOCKS.length}</span>
+              <span style={{ color: T.textMuted, fontSize: 11 }}>{loadedCount}/{ALL_STOCKS.length} stocks</span>
             </div>
           )}
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -1154,7 +1212,7 @@ export default function DalalStreet() {
           {loading && loadedCount < ALL_STOCKS.length && (
             <div style={{ textAlign: "center", padding: 40, color: T.textFaint }}>
               <div style={{ width: 24, height: 24, border: `3px solid ${T.border}`, borderTopColor: T.blue, borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 12px" }} />
-              Loading stock data... ({loadedCount}/{ALL_STOCKS.length})
+              Loading stock data... ({loadedCount}/{ALL_STOCKS.length} stocks)
             </div>
           )}
 
