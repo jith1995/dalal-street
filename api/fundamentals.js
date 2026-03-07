@@ -1,4 +1,3 @@
-// NSE India API - no auth required, real fundamental data for Indian stocks
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -8,8 +7,7 @@ export default async function handler(req, res) {
   const { symbol } = req.query;
   if (!symbol) return res.status(400).json({ error: "symbol required" });
 
-  // Strip .NS suffix → NSE symbol
-  const nseSymbol = symbol.replace(".NS", "").replace(".BO", "");
+  const nseSymbol = symbol.replace(".NS", "").replace(".BO", "").toUpperCase();
 
   const HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -20,55 +18,78 @@ export default async function handler(req, res) {
   };
 
   try {
-    // NSE requires a session cookie - hit the homepage first
+    // NSE requires session cookie
     const sessionRes = await fetch("https://www.nseindia.com", { headers: HEADERS });
     const rawCookies = sessionRes.headers.get("set-cookie") || "";
     const cookieStr = rawCookies.split(",").map(c => c.split(";")[0].trim()).filter(Boolean).join("; ");
 
-    // NSE quote API
-    const url = `https://www.nseindia.com/api/quote-equity?symbol=${encodeURIComponent(nseSymbol)}`;
-    const r = await fetch(url, {
-      headers: { ...HEADERS, "Cookie": cookieStr },
-      signal: AbortSignal.timeout(10000),
-    });
+    const headersWithCookie = { ...HEADERS, "Cookie": cookieStr };
 
-    if (!r.ok) return res.status(r.status).json({ error: `NSE returned ${r.status}`, symbol: nseSymbol });
+    // Fetch quote-equity and financial details in parallel
+    const [quoteRes, finRes] = await Promise.all([
+      fetch(`https://www.nseindia.com/api/quote-equity?symbol=${encodeURIComponent(nseSymbol)}`, {
+        headers: headersWithCookie, signal: AbortSignal.timeout(10000),
+      }),
+      fetch(`https://www.nseindia.com/api/quote-equity?symbol=${encodeURIComponent(nseSymbol)}&section=trade_info`, {
+        headers: headersWithCookie, signal: AbortSignal.timeout(10000),
+      }),
+    ]);
 
-    const data = await r.json();
-    const info = data.info || {};
-    const metadata = data.metadata || {};
-    const priceInfo = data.priceInfo || {};
-    const securityInfo = data.securityInfo || {};
-    const industryInfo = data.industryInfo || {};
+    if (!quoteRes.ok) return res.status(quoteRes.status).json({ error: `NSE returned ${quoteRes.status}` });
 
-    // PE from NSE
-    const pe = metadata.pdSymbolPe ? parseFloat(metadata.pdSymbolPe) : null;
-    const sectorPe = metadata.pdSectorPe ? parseFloat(metadata.pdSectorPe) : null;
-    const pb = metadata.pdSymbolPb ? parseFloat(metadata.pdSymbolPb) : null;
-    const marketCap = metadata.totalTradedValue ? null : null; // NSE doesn't give mcap here
-    const eps = pe && priceInfo.lastPrice ? priceInfo.lastPrice / pe : null;
-    const dividendYield = metadata.pdSectorPe ? null : null;
+    const quote = await quoteRes.json();
+    const tradeInfo = finRes.ok ? await finRes.json() : {};
+
+    const metadata  = quote.metadata  || {};
+    const priceInfo = quote.priceInfo  || {};
+    const secInfo   = quote.securityInfo || {};
+    const info      = quote.info || {};
+
+    const pe       = metadata.pdSymbolPe  ? parseFloat(metadata.pdSymbolPe)  : null;
+    const sectorPe = metadata.pdSectorPe  ? parseFloat(metadata.pdSectorPe)  : null;
+    const price    = priceInfo.lastPrice  || priceInfo.close || null;
+    const eps      = (pe && price)        ? parseFloat((price / pe).toFixed(2)) : null;
+    const faceVal  = secInfo.faceValue    || null;
+    const issued   = secInfo.issuedSize   || null;
+
+    // Market cap = issued shares × current price (in INR, convert to crores)
+    const marketCapINR = (issued && price) ? issued * price : null;  // raw INR
+    // Store in same units as Yahoo (raw rupees) for our formatter
+    const marketCap = marketCapINR;
+
+    // Dividend yield from trade info
+    const mktDeptOrder = tradeInfo.marketDeptOrderBook || {};
+    const tradeInfoData = tradeInfo.tradeInfo || {};
+    const deliveryPct = tradeInfoData.deliveryToTradedQuantity ? parseFloat(tradeInfoData.deliveryToTradedQuantity) : null;
+
+    // 52W high/low
+    const weekHigh = priceInfo.weekHighLow?.max || null;
+    const weekLow  = priceInfo.weekHighLow?.min || null;
 
     return res.status(200).json({
       fundamentals: {
         pe,
-        forwardPe:     null,
-        pb,
+        forwardPe:      null,
+        pb:             null,
         eps,
-        marketCap:     null,
-        beta:          null,
-        dividendYield: null,
-        roe:           null,
-        revenueGrowth: null,
-        grossMargins:  null,
-        debtToEquity:  null,
-        currentRatio:  null,
+        marketCap,
+        beta:           null,
+        dividendYield:  null,
+        roe:            null,
+        revenueGrowth:  null,
+        grossMargins:   null,
+        debtToEquity:   null,
+        currentRatio:   null,
         sectorPe,
-        source: "nse",
-        _raw: { info, metadata, priceInfo, securityInfo },
+        deliveryPct,
+        faceValue:      faceVal,
+        weekHigh,
+        weekLow,
+        industry:       info.industry || null,
+        source:         "nse",
       }
     });
   } catch (e) {
-    return res.status(500).json({ error: e.message, symbol: nseSymbol });
+    return res.status(500).json({ error: e.message });
   }
 }
