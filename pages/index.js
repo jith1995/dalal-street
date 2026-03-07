@@ -681,7 +681,7 @@ export default function DalalStreet() {
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             {[
-              { title: "Top Gainers Today", stocks: [...ALL_STOCKS].sort((a,b) => (stockData[b.symbol]?.changePct||−99)-(stockData[a.symbol]?.changePct||−99)).slice(0,6), pos: true },
+              { title: "Top Gainers Today", stocks: [...ALL_STOCKS].sort((a,b) => (stockData[b.symbol]?.changePct||-99)-(stockData[a.symbol]?.changePct||-99)).slice(0,6), pos: true },
               { title: "Top Losers Today", stocks: [...ALL_STOCKS].sort((a,b) => (stockData[a.symbol]?.changePct||99)-(stockData[b.symbol]?.changePct||99)).slice(0,6), pos: false },
             ].map(group => (
               <Card key={group.title}>
