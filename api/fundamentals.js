@@ -1,3 +1,5 @@
+// Yahoo Finance v8/chart meta already contains PE, market cap, beta etc.
+// No crumb needed — same endpoint as our price data.
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -15,84 +17,33 @@ export default async function handler(req, res) {
   };
 
   try {
-    // Step 1: get cookies + crumb
-    const cookieRes = await fetch("https://finance.yahoo.com", { headers: HEADERS });
-    const rawCookies = cookieRes.headers.get("set-cookie") || "";
-    const cookieStr = rawCookies.split(",").map(c => c.split(";")[0].trim()).filter(Boolean).join("; ");
+    // v8/chart works without auth and meta contains fundamental fields
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=5d&includePrePost=false`;
+    const r = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(10000) });
+    if (!r.ok) return res.status(r.status).json({ error: `Yahoo returned ${r.status}` });
 
-    const crumbRes = await fetch("https://query2.finance.yahoo.com/v1/test/getcrumb", {
-      headers: { ...HEADERS, "Cookie": cookieStr },
-    });
-    const crumb = await crumbRes.text();
-
-    if (!crumb || crumb.includes("{")) {
-      return fallbackQuote(symbol, res, HEADERS);
-    }
-
-    // Step 2: fetch quoteSummary with crumb
-    const modules = "summaryDetail,defaultKeyStatistics,financialData";
-    const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=${modules}&crumb=${encodeURIComponent(crumb)}`;
-    const dataRes = await fetch(url, {
-      headers: { ...HEADERS, "Cookie": cookieStr },
-    });
-
-    if (!dataRes.ok) return fallbackQuote(symbol, res, HEADERS);
-
-    const data = await dataRes.json();
-    const result = data.quoteSummary?.result?.[0];
-    if (!result) return fallbackQuote(symbol, res, HEADERS);
-
-    const sd = result.summaryDetail || {};
-    const ks = result.defaultKeyStatistics || {};
-    const fd = result.financialData || {};
-
-    return res.status(200).json({
-      fundamentals: {
-        pe:            sd.trailingPE?.raw        ?? null,
-        forwardPe:     sd.forwardPE?.raw         ?? null,
-        pb:            ks.priceToBook?.raw        ?? null,
-        eps:           ks.trailingEps?.raw        ?? null,
-        marketCap:     sd.marketCap?.raw          ?? null,
-        beta:          sd.beta?.raw               ?? null,
-        dividendYield: sd.dividendYield?.raw      ?? null,
-        roe:           fd.returnOnEquity?.raw     ?? null,
-        revenueGrowth: fd.revenueGrowth?.raw      ?? null,
-        grossMargins:  fd.grossMargins?.raw       ?? null,
-        debtToEquity:  fd.debtToEquity?.raw       ?? null,
-        currentRatio:  fd.currentRatio?.raw       ?? null,
-        source: "quoteSummary",
-      }
-    });
-
-  } catch (e) {
-    return fallbackQuote(symbol, res, HEADERS);
-  }
-}
-
-async function fallbackQuote(symbol, res, HEADERS) {
-  try {
-    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`;
-    const r = await fetch(url, { headers: HEADERS });
-    if (!r.ok) return res.status(r.status).json({ error: `Yahoo v7 returned ${r.status}` });
     const data = await r.json();
-    const q = data.quoteResponse?.result?.[0];
-    if (!q) return res.status(404).json({ error: "No data from fallback" });
+    const meta = data.chart?.result?.[0]?.meta;
+    if (!meta) return res.status(404).json({ error: "No meta in chart response" });
 
+    // These fields live directly on meta
     return res.status(200).json({
       fundamentals: {
-        pe:            q.trailingPE                  ?? null,
-        forwardPe:     q.forwardPE                   ?? null,
-        pb:            q.priceToBook                 ?? null,
-        eps:           q.epsTrailingTwelveMonths      ?? null,
-        marketCap:     q.marketCap                   ?? null,
-        beta:          q.beta                        ?? null,
-        dividendYield: q.trailingAnnualDividendYield  ?? null,
+        pe:            meta.trailingPE            ?? null,
+        forwardPe:     null,                              // not in v8
+        pb:            null,                              // not in v8
+        eps:           null,                              // not in v8
+        marketCap:     meta.marketCap             ?? null,
+        beta:          null,                              // not in v8
+        dividendYield: null,                              // not in v8
         roe:           null,
         revenueGrowth: null,
         grossMargins:  null,
         debtToEquity:  null,
         currentRatio:  null,
-        source: "v7quote",
+        source: "v8chart_meta",
+        // Return raw meta so we can inspect what's actually available
+        _raw: meta,
       }
     });
   } catch (e) {
