@@ -48,9 +48,11 @@ const ALL_STOCKS = [
 
 const PROXY_BASE = "/api/stock";
 
-// ── 5-PILLAR SCORING ENGINE ───────────────────────────────────────────────────
-function scoreStock(d) {
+// ── 7-PILLAR SCORING ENGINE (Technical 60% + Fundamental 40%) ────────────────
+function scoreStock(d, f) {
   if (!d) return null;
+
+  // ── TECHNICAL PILLARS (60%) ─────────────────────────────────────────────────
 
   // PILLAR 1: MOMENTUM (20%) — price returns + RSI
   let momentum = 50;
@@ -58,14 +60,14 @@ function scoreStock(d) {
   if (d.returns.d30 != null) momentum += Math.min(15, Math.max(-15, d.returns.d30 * 0.8));
   if (d.returns.d100 != null) momentum += Math.min(15, Math.max(-15, d.returns.d100 * 0.3));
   if (d.rsi != null) {
-    if (d.rsi < 30) momentum += 15;       // oversold = opportunity
+    if (d.rsi < 30) momentum += 15;
     else if (d.rsi < 45) momentum += 8;
-    else if (d.rsi > 75) momentum -= 15;  // overbought = caution
+    else if (d.rsi > 75) momentum -= 15;
     else if (d.rsi > 65) momentum -= 8;
   }
   momentum = Math.min(100, Math.max(0, momentum));
 
-  // PILLAR 2: TREND STRENGTH (20%) — price vs MAs
+  // PILLAR 2: TREND STRENGTH (15%) — price vs MAs
   let trend = 50;
   if (d.sma20 != null) trend += d.current > d.sma20 ? 15 : -15;
   if (d.sma50 != null) trend += d.current > d.sma50 ? 15 : -15;
@@ -74,56 +76,89 @@ function scoreStock(d) {
   if (d.crossSignal === "DEATH") trend -= 15;
   trend = Math.min(100, Math.max(0, trend));
 
-  // PILLAR 3: VOLUME CONFIRMATION (15%) — volume anomalies
+  // PILLAR 3: VOLUME CONFIRMATION (10%) — volume anomalies
   let volume = 50;
   if (d.volRatio != null) {
-    if (d.volRatio > 2 && d.changePct > 0) volume += 30;       // big up move on big volume
-    else if (d.volRatio > 2 && d.changePct < 0) volume -= 20;  // big down move on big volume
+    if (d.volRatio > 2 && d.changePct > 0) volume += 30;
+    else if (d.volRatio > 2 && d.changePct < 0) volume -= 20;
     else if (d.volRatio > 1.3) volume += 10;
     else if (d.volRatio < 0.5) volume -= 10;
   }
   volume = Math.min(100, Math.max(0, volume));
 
-  // PILLAR 4: VALUE POSITION (25%) — 52W positioning
+  // PILLAR 4: VALUE POSITION (15%) — 52W positioning
   let value = 50;
   if (d.posIn52W != null) {
-    if (d.posIn52W < 20) value += 35;       // near 52W low = value zone
+    if (d.posIn52W < 20) value += 35;
     else if (d.posIn52W < 35) value += 20;
     else if (d.posIn52W < 50) value += 10;
-    else if (d.posIn52W > 85) value -= 25;  // near 52W high = expensive
+    else if (d.posIn52W > 85) value -= 25;
     else if (d.posIn52W > 70) value -= 10;
   }
   value = Math.min(100, Math.max(0, value));
 
-  // PILLAR 5: RISK (20%) — drawdown, volatility proxy
-  let risk = 50;
-  const drawdown = d.high52 ? ((d.current - d.high52) / d.high52) * 100 : 0;
-  if (drawdown < -30) risk += 20;        // big drawdown = lower risk of further fall
-  else if (drawdown < -15) risk += 10;
-  else if (drawdown > -5) risk -= 15;    // near ATH = higher risk
-  if (d.volRatio > 3) risk -= 15;        // extreme volume = uncertain
-  risk = Math.min(100, Math.max(0, risk));
+  // ── FUNDAMENTAL PILLARS (40%) ───────────────────────────────────────────────
+  // If no fundamental data → default to neutral 50 (no penalty, no bonus)
+
+  // PILLAR 5: VALUATION — P/E + P/B (20%)
+  let valuation = 50;
+  if (f?.pe != null) {
+    if (f.pe < 0)          valuation = 20;        // negative earnings = concern
+    else if (f.pe < 15)    valuation = 95;         // deep value
+    else if (f.pe < 25)    valuation = 75;         // fair value
+    else if (f.pe < 40)    valuation = 50;         // expensive but growing
+    else                   valuation = 25;          // very expensive
+  }
+  if (f?.pb != null) {
+    if (f.pb < 1)  valuation = Math.min(100, valuation + 10);  // below book = bonus
+    else if (f.pb > 5) valuation = Math.max(0, valuation - 10); // premium = penalty
+  }
+  valuation = Math.min(100, Math.max(0, valuation));
+
+  // PILLAR 6: EARNINGS QUALITY — EPS (10%)
+  let earnings = 50;
+  if (f?.eps != null) {
+    if (f.eps > 0) earnings = 70;      // profitable
+    else earnings = 25;                 // loss-making
+  }
+  earnings = Math.min(100, Math.max(0, earnings));
+
+  // PILLAR 7: RISK / BETA (10%)
+  let betaScore = 50;
+  if (f?.beta != null) {
+    if (f.beta < 0.5)      betaScore = 80;  // very defensive
+    else if (f.beta < 0.8) betaScore = 90;  // defensive
+    else if (f.beta < 1.2) betaScore = 70;  // market-like
+    else if (f.beta < 1.5) betaScore = 50;  // moderately volatile
+    else                   betaScore = 30;   // high volatility
+  }
+  betaScore = Math.min(100, Math.max(0, betaScore));
+
+  const hasFundamentals = f?.pe != null || f?.pb != null || f?.eps != null;
 
   // WEIGHTED COMPOSITE
   const composite = Math.round(
-    momentum * 0.20 +
-    trend    * 0.20 +
-    volume   * 0.15 +
-    value    * 0.25 +
-    risk     * 0.20
+    momentum   * 0.20 +
+    trend      * 0.15 +
+    volume     * 0.10 +
+    value      * 0.15 +
+    valuation  * 0.20 +
+    earnings   * 0.10 +
+    betaScore  * 0.10
   );
 
-  // SIGNAL
+  // SIGNAL — tighter thresholds now that fundamentals are included
   let signal, signalColor, signalBg, signalBorder;
-  if (composite >= 70)      { signal = "STRONG BUY";  signalColor = "#16a34a"; signalBg = "rgba(22,163,74,0.15)";   signalBorder = "rgba(22,163,74,0.4)"; }
-  else if (composite >= 58) { signal = "BUY";          signalColor = "#22c55e"; signalBg = "rgba(34,197,94,0.1)";   signalBorder = "rgba(34,197,94,0.3)"; }
-  else if (composite >= 44) { signal = "HOLD";         signalColor = "#eab308"; signalBg = "rgba(234,179,8,0.1)";   signalBorder = "rgba(234,179,8,0.3)"; }
-  else if (composite >= 32) { signal = "SELL";         signalColor = "#f97316"; signalBg = "rgba(249,115,22,0.1)";  signalBorder = "rgba(249,115,22,0.3)"; }
+  if (composite >= 75)      { signal = "STRONG BUY";  signalColor = "#16a34a"; signalBg = "rgba(22,163,74,0.15)";   signalBorder = "rgba(22,163,74,0.4)"; }
+  else if (composite >= 60) { signal = "BUY";          signalColor = "#22c55e"; signalBg = "rgba(34,197,94,0.1)";   signalBorder = "rgba(34,197,94,0.3)"; }
+  else if (composite >= 45) { signal = "HOLD";         signalColor = "#eab308"; signalBg = "rgba(234,179,8,0.1)";   signalBorder = "rgba(234,179,8,0.3)"; }
+  else if (composite >= 30) { signal = "SELL";         signalColor = "#f97316"; signalBg = "rgba(249,115,22,0.1)";  signalBorder = "rgba(249,115,22,0.3)"; }
   else                      { signal = "STRONG SELL";  signalColor = "#ef4444"; signalBg = "rgba(239,68,68,0.1)";   signalBorder = "rgba(239,68,68,0.3)"; }
 
   return {
     composite,
-    pillars: { momentum, trend, volume, value, risk },
+    pillars: { momentum, trend, volume, value, valuation, earnings, betaScore },
+    hasFundamentals,
     signal, signalColor, signalBg, signalBorder,
   };
 }
@@ -204,30 +239,45 @@ async function fetchStockData(symbol) {
       rsi, high52, low52, posIn52W,
       volRatio, avgVol30, todayVol, crossSignal, history,
     };
-    stockData.score = scoreStock(stockData);
+    stockData.score = scoreStock(stockData, null); // fundamentals loaded separately
     return stockData;
   } catch (e) { return null; }
 }
 
-async function getClaudeVerdict(d, stockName, score) {
-  const prompt = `You are a sharp quantitative analyst. Based on these indicators for ${stockName}, give a verdict. Return ONLY JSON, no markdown.
+async function fetchFundamentals(symbol) {
+  try {
+    const res = await fetch(`/api/fundamentals?symbol=${symbol}`, { signal: AbortSignal.timeout(10000) });
+    const data = await res.json();
+    return data.fundamentals || null;
+  } catch (e) { return null; }
+}
+
+async function getClaudeVerdict(d, stockName, score, f) {
+  const fundamentalContext = f ? `
+Fundamental data:
+- P/E: ${f.pe?.toFixed(1) ?? "N/A"} | Forward P/E: ${f.forwardPe?.toFixed(1) ?? "N/A"} | P/B: ${f.pb?.toFixed(2) ?? "N/A"}
+- EPS: ${f.eps?.toFixed(2) ?? "N/A"} | Beta: ${f.beta?.toFixed(2) ?? "N/A"} | Div Yield: ${f.dividendYield != null ? (f.dividendYield*100).toFixed(2)+"%" : "N/A"}
+- ROE: ${f.roe != null ? (f.roe*100).toFixed(1)+"%" : "N/A"} | Gross Margin: ${f.grossMargins != null ? (f.grossMargins*100).toFixed(1)+"%" : "N/A"}` : "Fundamental data: Not available";
+
+  const prompt = `You are a sharp equity analyst. Based on these indicators for ${stockName}, give a verdict. Return ONLY JSON, no markdown.
 
 Rule-based signal: ${score.signal} (Score: ${score.composite}/100)
-Pillar scores: Momentum ${score.pillars.momentum}/100, Trend ${score.pillars.trend}/100, Volume ${score.pillars.volume}/100, Value ${score.pillars.value}/100, Risk ${score.pillars.risk}/100
+Pillar scores: Momentum ${score.pillars.momentum}/100, Trend ${score.pillars.trend}/100, Volume ${score.pillars.volume}/100, Value ${score.pillars.value}/100, Valuation ${score.pillars.valuation}/100, Earnings ${score.pillars.earnings}/100
 
-Key data:
-- Price: ₹${d.current?.toFixed(2)} | Day: ${d.changePct?.toFixed(2)}%
+Technical:
+- Price: ${d.current?.toFixed(2)} | Day: ${d.changePct?.toFixed(2)}%
 - RSI: ${d.rsi?.toFixed(1)} | D10: ${d.returns?.d10?.toFixed(2)}% | D30: ${d.returns?.d30?.toFixed(2)}% | D100: ${d.returns?.d100?.toFixed(2)}%
 - vs SMA20: ${d.current > d.sma20 ? "ABOVE" : "BELOW"} | vs SMA50: ${d.current > d.sma50 ? "ABOVE" : "BELOW"} | vs SMA200: ${d.current > d.sma200 ? "ABOVE" : "BELOW"}
 - 52W Position: ${d.posIn52W?.toFixed(1)}% | Volume: ${d.volRatio?.toFixed(2)}x | Cross: ${d.crossSignal}
+${fundamentalContext}
 
 Return JSON:
-{"rsi_signal":"one sentence","trend_signal":"one sentence","volume_signal":"one sentence","key_risk":"one sentence","summary":"2 sentence analyst take on this stock right now"}`;
+{"rsi_signal":"one sentence","trend_signal":"one sentence","fundamental_take":"one sentence on valuation and fundamentals","key_risk":"one sentence","summary":"2 sentence combined technical and fundamental analyst take"}`;
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 600, messages: [{ role: "user", content: prompt }] }),
+    body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 700, messages: [{ role: "user", content: prompt }] }),
   });
   const data = await res.json();
   const text = data.content.map(c => c.text || "").join("");
@@ -421,22 +471,24 @@ const GUIDE_SECTIONS = [
     title: "Signal Guide",
     emoji: "🎯",
     items: [
-      { term: "STRONG BUY", color: "#16a34a", desc: "Score 70+. Multiple strong indicators aligned — momentum, trend, and value all pointing up. High conviction entry." },
-      { term: "BUY", color: T.green, desc: "Score 58–69. More positives than negatives. Good setup but not all pillars are firing. Consider entering on dips." },
-      { term: "HOLD", color: T.yellow, desc: "Score 44–57. Mixed signals. Neither compelling to buy nor urgent to sell. Wait for clearer direction." },
-      { term: "SELL", color: "#f97316", desc: "Score 32–43. Technical deterioration. Trend weakening, momentum fading. Consider reducing position." },
-      { term: "STRONG SELL", color: T.red, desc: "Score below 32. Multiple red flags across pillars. Strong technical breakdown. High risk of further downside." },
+      { term: "STRONG BUY", color: "#16a34a", desc: "Score 75+. Strong technical setup AND healthy fundamentals — momentum, trend, valuation, and earnings all aligned. High conviction entry." },
+      { term: "BUY", color: T.green, desc: "Score 60–74. More positives than negatives across technical and fundamental pillars. Good setup — consider entering on dips." },
+      { term: "HOLD", color: T.yellow, desc: "Score 45–59. Mixed signals across pillars. Neither compelling to buy nor urgent to sell. Wait for clearer direction." },
+      { term: "SELL", color: "#f97316", desc: "Score 30–44. Technical and/or fundamental deterioration. Trend weakening, valuation stretched or earnings declining. Consider reducing position." },
+      { term: "STRONG SELL", color: T.red, desc: "Score below 30. Multiple red flags across technical and fundamental pillars. High risk of further downside." },
     ]
   },
   {
-    title: "The 5 Pillars Explained",
+    title: "The 7 Pillars Explained",
     emoji: "🏛️",
     items: [
-      { term: "Momentum (20%)", color: T.blue, desc: "Measures price velocity using D10, D30, D100 returns and RSI. High momentum = stock is accelerating. RSI below 30 = oversold bounce opportunity. RSI above 70 = overbought, caution." },
-      { term: "Trend Strength (20%)", color: T.blue, desc: "Checks if price is above or below SMA20, SMA50, SMA200. Price above all 3 = strong uptrend. Below all 3 = downtrend. Golden Cross (SMA20 crosses above SMA50) is a powerful bullish signal." },
-      { term: "Volume Confirmation (15%)", color: T.blue, desc: "A price move on high volume is more significant than the same move on low volume. A big up day with 2x+ normal volume = conviction buying. Big down day on high volume = distribution — institutions selling." },
-      { term: "Value Position (25%)", color: T.blue, desc: "Where is the stock in its 52-week range? Near the 52W low = potential value zone, more upside room. Near 52W high = limited upside, higher risk of pullback. This is the highest-weighted pillar." },
-      { term: "Risk (20%)", color: T.blue, desc: "Measures drawdown from 52W high and volume volatility. A stock that has already fallen 30%+ has lower incremental risk than one near all-time highs. Extreme volume spikes indicate uncertainty." },
+      { term: "Momentum (20%) — Technical", color: T.blue, desc: "Measures price velocity using D10, D30, D100 returns and RSI. High momentum = stock is accelerating. RSI below 30 = oversold bounce opportunity. RSI above 70 = overbought, caution." },
+      { term: "Trend Strength (15%) — Technical", color: T.blue, desc: "Checks if price is above or below SMA20, SMA50, SMA200. Price above all 3 = strong uptrend. Golden Cross (SMA20 crosses above SMA50) is a powerful bullish signal." },
+      { term: "Volume Confirmation (10%) — Technical", color: T.blue, desc: "A price move on high volume is more significant than the same move on low volume. Big up day with 2x+ normal volume = conviction buying. Big down day on high volume = distribution." },
+      { term: "Value Position (15%) — Technical", color: T.blue, desc: "Where is the stock in its 52-week range? Near the 52W low = potential value zone. Near 52W high = limited upside, higher pullback risk." },
+      { term: "Valuation (20%) — Fundamental", color: T.accent, desc: "Combines P/E and P/B ratios. P/E below 15 scores 90-100 (deep value). P/E above 40 scores 10-35 (very expensive). P/B below 1 = trading below book value (bonus). This is the highest fundamental weight." },
+      { term: "Earnings Quality (10%) — Fundamental", color: T.accent, desc: "Checks EPS (Earnings Per Share). Positive EPS = company is profitable = 70/100. Negative EPS = loss-making = 25/100. A simple but critical filter — losses compound downside risk." },
+      { term: "Beta / Risk (10%) — Fundamental", color: T.accent, desc: "Beta measures how much the stock moves vs the market. Below 0.8 = defensive (scores 90). 0.8–1.2 = market-like (scores 70). Above 1.5 = high volatility (scores 30). Lower beta = more predictable returns." },
     ]
   },
   {
@@ -482,6 +534,7 @@ const GUIDE_SECTIONS = [
 export default function DalalStreet() {
   const [page, setPage] = useState(1);
   const [stockData, setStockData] = useState({});
+  const [fundData, setFundData] = useState({});
   const [loading, setLoading] = useState(true);
   const [selectedStock, setSelectedStock] = useState(ALL_STOCKS[0]);
   const [claudeAnalysis, setClaudeAnalysis] = useState(null);
@@ -497,11 +550,25 @@ export default function DalalStreet() {
     loadedRef.current = true;
     async function loadAll() {
       setLoading(true);
+      // Load price data first (fast)
       await Promise.all(ALL_STOCKS.map(async (s) => {
         const d = await fetchStockData(s.symbol);
         if (d) setStockData(prev => ({ ...prev, [s.symbol]: d }));
       }));
       setLoading(false);
+      // Then load fundamentals in background (slower, non-blocking)
+      ALL_STOCKS.forEach(async (s) => {
+        const f = await fetchFundamentals(s.symbol);
+        if (f) {
+          setFundData(prev => ({ ...prev, [s.symbol]: f }));
+          // Re-score with fundamentals once available
+          setStockData(prev => {
+            const d = prev[s.symbol];
+            if (!d) return prev;
+            return { ...prev, [s.symbol]: { ...d, score: scoreStock(d, f) } };
+          });
+        }
+      });
     }
     loadAll();
   }, []);
@@ -510,9 +577,10 @@ export default function DalalStreet() {
     if (page !== 3) return;
     const d = stockData[selectedStock.symbol];
     if (!d || !d.score) return;
+    const f = fundData[selectedStock.symbol] || null;
     setClaudeAnalysis(null);
     setClaudeLoading(true);
-    getClaudeVerdict(d, selectedStock.name, d.score)
+    getClaudeVerdict(d, selectedStock.name, d.score, f)
       .then(v => { setClaudeAnalysis(v); setClaudeLoading(false); })
       .catch(() => setClaudeLoading(false));
   }, [selectedStock, page, stockData]);
@@ -738,15 +806,19 @@ export default function DalalStreet() {
           </div>
 
           <Card style={{ padding: 0, overflow: "hidden" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "160px 80px 110px 80px 75px 75px 75px 65px 70px 80px 85px", padding: "10px 16px", background: T.bg, borderBottom: `1px solid ${T.border}` }}>
-              {["Stock","Price","Signal","Score","Day %","D30","D100","RSI","Vol×","52W Pos","Chart"].map(h => (
+            <div style={{ display: "grid", gridTemplateColumns: "150px 75px 105px 70px 65px 65px 65px 55px 60px 55px 55px 70px", padding: "10px 16px", background: T.bg, borderBottom: `1px solid ${T.border}` }}>
+              {["Stock","Price","Signal","Score","Day %","D30","D100","RSI","Vol×","52W","P/E","Mkt Cap"].map(h => (
                 <div key={h} style={{ color: T.textFaint, fontSize: 10, letterSpacing: "0.8px", textTransform: "uppercase", fontFamily: "JetBrains Mono" }}>{h}</div>
               ))}
             </div>
             {filteredStocks.map((stock, idx) => {
               const d = stockData[stock.symbol];
+              const f = fundData[stock.symbol];
+              const peColor = !f?.pe ? T.textFaint : f.pe < 15 ? T.green : f.pe < 25 ? T.yellow : f.pe < 40 ? "#f97316" : T.red;
+              const mcap = f?.marketCap;
+              const mcapStr = !mcap ? "—" : mcap >= 1e12 ? `₹${(mcap/1e12).toFixed(1)}T` : mcap >= 1e9 ? `₹${(mcap/1e9).toFixed(0)}B` : `₹${(mcap/1e6).toFixed(0)}M`;
               return (
-                <div key={stock.symbol} className="row-hover" onClick={() => { setSelectedStock(stock); setPage(3); }} style={{ display: "grid", gridTemplateColumns: "160px 80px 110px 80px 75px 75px 75px 65px 70px 80px 85px", padding: "9px 16px", borderBottom: idx < filteredStocks.length-1 ? `1px solid ${T.border}` : "none", transition: "background 0.12s", alignItems: "center" }}>
+                <div key={stock.symbol} className="row-hover" onClick={() => { setSelectedStock(stock); setPage(3); }} style={{ display: "grid", gridTemplateColumns: "150px 75px 105px 70px 65px 65px 65px 55px 60px 55px 55px 70px", padding: "9px 16px", borderBottom: idx < filteredStocks.length-1 ? `1px solid ${T.border}` : "none", transition: "background 0.12s", alignItems: "center" }}>
                   <div>
                     <div style={{ color: T.text, fontWeight: 600, fontSize: 12 }}>{stock.short}</div>
                     <div style={{ color: T.textFaint, fontSize: 10, marginTop: 1 }}>{stock.sector}</div>
@@ -774,15 +846,16 @@ export default function DalalStreet() {
                   <div style={{ color: d ? (d.volRatio > 1.5 ? T.yellow : T.textMuted) : T.textFaint, fontSize: 11, fontFamily: "JetBrains Mono" }}>{d ? `${d.volRatio.toFixed(1)}×` : "—"}</div>
                   <div>
                     {d && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        <div style={{ width: 44, height: 4, background: T.border, borderRadius: 2, overflow: "hidden" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                        <div style={{ width: 36, height: 4, background: T.border, borderRadius: 2, overflow: "hidden" }}>
                           <div style={{ height: "100%", width: `${d.posIn52W}%`, background: d.posIn52W > 75 ? T.red : d.posIn52W < 30 ? T.green : T.yellow, borderRadius: 2 }} />
                         </div>
                         <span style={{ color: T.textFaint, fontSize: 9 }}>{d.posIn52W.toFixed(0)}%</span>
                       </div>
                     )}
                   </div>
-                  <div>{d ? <SparkLine history={d.history} change={d.change} width={80} height={28} /> : null}</div>
+                  <div style={{ color: peColor, fontSize: 11, fontFamily: "JetBrains Mono" }}>{f ? (f.pe != null ? f.pe.toFixed(1) : "—") : <span style={{ animation: "pulse 1.5s infinite", color: T.textFaint }}>…</span>}</div>
+                  <div style={{ color: T.textMuted, fontSize: 10, fontFamily: "JetBrains Mono" }}>{f ? mcapStr : <span style={{ animation: "pulse 1.5s infinite", color: T.textFaint }}>…</span>}</div>
                 </div>
               );
             })}
@@ -847,7 +920,7 @@ export default function DalalStreet() {
                 <Card style={{ marginBottom: 16, border: `1px solid ${d.score.signalBorder}`, background: d.score.signalBg }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
                     <div>
-                      <SectionLabel>5-Pillar Scoring Breakdown</SectionLabel>
+                      <SectionLabel>7-Pillar Scoring Breakdown</SectionLabel>
                       <div style={{ color: T.textMuted, fontSize: 12 }}>Composite score: <span style={{ color: d.score.signalColor, fontWeight: 700, fontFamily: "JetBrains Mono" }}>{d.score.composite}/100</span></div>
                     </div>
                     <SignalBadge {...d.score} size="lg" />
@@ -913,6 +986,58 @@ export default function DalalStreet() {
                 <PositionBar value={d.posIn52W} low={d.low52} high={d.high52} />
               </Card>
 
+              {/* Fundamentals Card */}
+              {(() => {
+                const f = fundData[selectedStock.symbol];
+                const peColor = !f?.pe ? T.textMuted : f.pe < 15 ? T.green : f.pe < 25 ? T.yellow : f.pe < 40 ? "#f97316" : T.red;
+                const mcap = f?.marketCap;
+                const mcapStr = !mcap ? "—" : mcap >= 1e12 ? `₹${(mcap/1e12).toFixed(2)}T` : mcap >= 1e9 ? `₹${(mcap/1e9).toFixed(1)}B` : `₹${(mcap/1e6).toFixed(0)}M`;
+                const peLabel = !f?.pe ? "—" : f.pe < 0 ? "Loss-making" : f.pe < 15 ? "Value" : f.pe < 25 ? "Fair" : f.pe < 40 ? "Expensive" : "Very Expensive";
+                const healthColor = !f ? T.textFaint : (f.pe != null && f.pe > 0 && f.pe < 25 && f.eps > 0) ? T.green : (f.pe != null && f.pe < 40 && f.eps > 0) ? T.yellow : T.red;
+                const healthLabel = !f ? "Loading..." : (f.pe != null && f.pe > 0 && f.pe < 25 && f.eps > 0) ? "🟢 Fundamentally Healthy" : (f.pe != null && f.pe < 40 && f.eps > 0) ? "🟡 Mixed Fundamentals" : "🔴 Fundamental Concerns";
+                return (
+                  <Card style={{ marginBottom: 16, border: `1px solid ${healthColor}44`, background: `${healthColor}08` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                      <SectionLabel>Fundamental Health Check</SectionLabel>
+                      <div style={{ color: healthColor, fontSize: 12, fontWeight: 700 }}>{healthLabel}</div>
+                    </div>
+                    {!f ? (
+                      <div style={{ color: T.textFaint, fontSize: 12, animation: "pulse 1.5s infinite" }}>Loading fundamental data...</div>
+                    ) : (
+                      <>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 14 }}>
+                          {[
+                            { label: "P/E Ratio", value: f.pe?.toFixed(1) ?? "—", sub: peLabel, color: peColor },
+                            { label: "P/B Ratio", value: f.pb?.toFixed(2) ?? "—", sub: f.pb != null ? (f.pb < 1 ? "Below Book" : f.pb < 3 ? "Moderate" : "Premium") : "", color: f.pb != null ? (f.pb < 1 ? T.green : f.pb < 3 ? T.yellow : T.red) : T.textMuted },
+                            { label: "EPS (TTM)", value: f.eps != null ? `₹${f.eps.toFixed(2)}` : "—", sub: f.eps != null ? (f.eps > 0 ? "Profitable" : "Loss") : "", color: f.eps != null ? (f.eps > 0 ? T.green : T.red) : T.textMuted },
+                            { label: "Beta", value: f.beta?.toFixed(2) ?? "—", sub: f.beta != null ? (f.beta < 0.8 ? "Defensive" : f.beta < 1.2 ? "Market" : "Volatile") : "", color: f.beta != null ? (f.beta < 1 ? T.green : f.beta < 1.5 ? T.yellow : T.red) : T.textMuted },
+                          ].map(item => (
+                            <div key={item.label} style={{ textAlign: "center", padding: "10px 8px", background: T.bgCard, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                              <div style={{ color: T.textFaint, fontSize: 10, marginBottom: 4 }}>{item.label}</div>
+                              <div style={{ color: item.color, fontSize: 17, fontWeight: 800, fontFamily: "JetBrains Mono" }}>{item.value}</div>
+                              {item.sub && <div style={{ color: item.color, fontSize: 9, marginTop: 3, opacity: 0.8 }}>{item.sub}</div>}
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+                          {[
+                            { label: "Market Cap", value: mcapStr, color: T.textMuted },
+                            { label: "Div Yield", value: f.dividendYield != null ? `${(f.dividendYield*100).toFixed(2)}%` : "—", color: f.dividendYield > 0 ? T.green : T.textMuted },
+                            { label: "ROE", value: f.roe != null ? `${(f.roe*100).toFixed(1)}%` : "—", color: f.roe != null ? (f.roe > 0.15 ? T.green : f.roe > 0 ? T.yellow : T.red) : T.textMuted },
+                            { label: "Gross Margin", value: f.grossMargins != null ? `${(f.grossMargins*100).toFixed(1)}%` : "—", color: f.grossMargins != null ? (f.grossMargins > 0.3 ? T.green : f.grossMargins > 0.1 ? T.yellow : T.red) : T.textMuted },
+                          ].map(item => (
+                            <div key={item.label} style={{ textAlign: "center", padding: "8px 6px", background: T.bgCard, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                              <div style={{ color: T.textFaint, fontSize: 10, marginBottom: 4 }}>{item.label}</div>
+                              <div style={{ color: item.color, fontSize: 14, fontWeight: 700, fontFamily: "JetBrains Mono" }}>{item.value}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </Card>
+                );
+              })()}
+
               {/* Claude Analysis */}
               <Card style={{ border: `1px solid ${T.blueBorder}`, background: T.blueBg }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
@@ -923,7 +1048,7 @@ export default function DalalStreet() {
                   <>
                     <p style={{ color: T.textMuted, fontSize: 13, lineHeight: 1.7, marginBottom: 16 }}>{claudeAnalysis.summary}</p>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                      {[{label:"Trend",text:claudeAnalysis.trend_signal,warn:false},{label:"Volume",text:claudeAnalysis.volume_signal,warn:false},{label:"Momentum",text:claudeAnalysis.rsi_signal,warn:false},{label:"Key Risk",text:claudeAnalysis.key_risk,warn:true}].map(item => (
+                      {[{label:"Trend",text:claudeAnalysis.trend_signal,warn:false},{label:"Fundamentals",text:claudeAnalysis.fundamental_take,warn:false},{label:"Momentum",text:claudeAnalysis.rsi_signal,warn:false},{label:"Key Risk",text:claudeAnalysis.key_risk,warn:true}].map(item => (
                         <div key={item.label} style={{ padding: "10px 12px", borderRadius: 8, background: item.warn ? T.redBg : T.bgCard, border: `1px solid ${item.warn ? T.redBorder : T.border}` }}>
                           <div style={{ color: item.warn ? T.red : T.textFaint, fontSize: 10, letterSpacing: "0.8px", marginBottom: 5, textTransform: "uppercase" }}>{item.label}</div>
                           <div style={{ color: item.warn ? "#fca5a5" : T.textMuted, fontSize: 12, lineHeight: 1.5 }}>{item.text}</div>
@@ -935,7 +1060,7 @@ export default function DalalStreet() {
                   <div style={{ color: T.textFaint, fontSize: 12 }}>Analysis will appear here once data loads.</div>
                 )}
                 <div style={{ marginTop: 14, color: T.textFaint, fontSize: 10, borderTop: `1px solid ${T.border}`, paddingTop: 10 }}>
-                  Technical analysis only · Not financial advice · Always do your own research
+                  Technical + fundamental analysis · Not financial advice · Always do your own research
                 </div>
               </Card>
             </>
